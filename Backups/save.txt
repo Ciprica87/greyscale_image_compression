@@ -1,0 +1,341 @@
+
+#include "stdafx.h"
+#include "common.h"
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <random>
+#include <fstream>
+#include <vector>
+#include <cstdio>
+
+using namespace std;
+using std::vector;
+
+struct HuffmanNode{
+    int frequency;
+    int value;
+    HuffmanNode* left;
+    HuffmanNode* right;
+
+    HuffmanNode(int freq, uchar val) : frequency(freq), value(val), left(nullptr), right(nullptr) {}
+};
+
+struct CompareHuffmanNodes{
+    bool operator()(const HuffmanNode* a, const HuffmanNode* b) const{
+        return a->frequency > b->frequency;
+    }
+};
+
+void assignBinaryCodes(HuffmanNode* node, string code, vector<string>& codes)
+{
+    if (node == nullptr)
+    {
+        return;
+    }
+    if (node->left == nullptr && node->right == nullptr)
+    {
+        codes[node->value] = code;
+        //node->code = code;
+    }
+    assignBinaryCodes(node->left, code + "0", codes);
+    assignBinaryCodes(node->right, code + "1", codes);
+}
+
+HuffmanNode* buildHuffmanTree(vector<int> frequencyVector) {
+    //Create a priority queue and populate it with the the nodes created with the frequnecies
+    priority_queue<HuffmanNode*, vector<HuffmanNode*>, CompareHuffmanNodes> priorityQueue;
+    for (int i = 0; i < frequencyVector.size(); i++){
+        if (frequencyVector[i] > 0) {
+            priorityQueue.push(new HuffmanNode(frequencyVector[i], i));
+            //cout << "Node: " << i << " - " << frequencyVector[i] << endl;
+        }
+    }
+    while (priorityQueue.size() > 1)
+    {
+        //Pop the two nodes with the smallest frequency
+        HuffmanNode* left = priorityQueue.top();
+        priorityQueue.pop();
+        HuffmanNode* right = priorityQueue.top();
+        priorityQueue.pop();
+
+        //Create a new node with a frequency equal to the sum of the frequencies of the two nodes
+        HuffmanNode* parent = new HuffmanNode(left->frequency + right->frequency, 0);
+        parent->left = left;
+        parent->right = right;
+
+        //Add the new node back to the priority queue
+        priorityQueue.push(parent);
+
+        /*HuffmanNode* left = priorityQueue.top();
+        priorityQueue.pop();
+        cout << "Node: " << left->value << " - " << left->frequency << endl;*/
+    }
+
+    //The last remaining node in the priority queue is the root of the Huffman tree
+    HuffmanNode* root = priorityQueue.top();
+    priorityQueue.pop();
+
+    return root;
+}
+
+vector<int> createFrequencyVector(vector<int> pixel_data) {
+
+    vector<int> frequencyVector(256);
+
+    for (int i = 0; i < pixel_data.size() - 1; i++) {
+        frequencyVector[pixel_data[i]] ++;
+    }
+
+    /*for (int i = 0; i < 256; i++) {
+        cout << i << " - " << frequencyVector[i] << endl;
+    }*/
+
+    return frequencyVector;
+}
+
+vector<int> createPixelVector(Mat_<uchar> img) {
+
+    int index = 0;
+    int num_pixels = img.rows * img.cols;
+    vector<int> pixel_data(num_pixels);
+
+    for (int i = 0; i < img.rows; i++){
+        for (int j = 0; j < img.cols; j++){
+            pixel_data[index] = img(i, j);
+            //cout << pixel_data[index] << " ";
+            index++;
+        }
+    }
+
+    return pixel_data;
+}
+
+char bitsToChar(std::vector<bool> bits) {
+
+    //Create a byte from the bool vector
+    char byte = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        if (bits[i])
+        {
+            byte |= (1 << (7 - i));
+        }
+    }
+    return byte;
+}
+
+void writeDataToBinaryFile(const string& filename, Mat_<uchar> img) {
+    vector<int> pixelData = createPixelVector(img);
+    vector<int> frequencyVector = createFrequencyVector(pixelData);
+    HuffmanNode* root = buildHuffmanTree(frequencyVector);   
+    vector<string> codes(256);
+    assignBinaryCodes(root, "", codes);
+
+    FILE* file = fopen(filename.c_str(), "wb");
+    if (!file) {
+        cout << "Failed to open file!\n";
+        return;
+    }
+
+    fwrite(&img.rows, 4, 1, file);
+    fwrite(&img.cols, 4, 1, file);
+
+    for (int i = 0; i < codes.size(); i++) {
+        string code = codes[i];
+        int index = i;
+        unsigned char sizeChar = static_cast<unsigned char>(code.length());
+        fwrite(&index, 1, 1, file);
+        fwrite(&sizeChar, 1, 1, file);
+
+        // Write the code bytes
+        unsigned char byte = 0;
+        int bitCount = 0;
+
+        for (char bit : code) {
+            byte <<= 1;
+            if (bit == '1') {
+                byte |= 1;
+            }
+            bitCount++;
+
+            if (bitCount == 8) {
+                fwrite(&byte, 1, 1, file);
+                byte = 0;
+                bitCount = 0;
+            }
+        }
+
+        // Write the remaining bits (if any) as a byte
+        if (bitCount > 0) {
+            byte <<= (8 - bitCount);
+            fwrite(&byte, sizeof(unsigned char), 1, file);
+        }
+    }
+
+    /*for (int i = 0; i < img.rows; i++) {
+        for (int j = 0; j < img.cols; j++) {
+            vector<uchar> codification;
+            const string& code = codes[img(i, j)];
+            for (char c : code) {
+                uchar value = static_cast<uchar>(c);
+                codification.push_back(value);
+            }
+            for (int k = 0; k < codification.size(); k++) {
+                bitBuffer |= (codification[k] << bitCounter);
+                bitCounter++;
+
+                if (bitCounter == 8) {
+                    fwrite(&bitBuffer, 1, 1, file);
+                    bitBuffer = 0;
+                    bitCounter = 0;
+                }
+            }
+        }
+    }
+    if (bitCounter < 8) {
+        while (bitCounter < 8) {
+            bitBuffer |= (0 << bitCounter);
+            bitCounter++;
+        }
+        fwrite(&bitBuffer, 1, 1, file);
+    }*/
+    
+    for (int i = 0; i < codes.size(); i++) {
+        cout << "Pixel: " << i << " Code: " << codes[i] << endl;
+    }
+        
+    fclose(file);
+}
+
+int checkIfCodeExists(vector<string> codes, string code) {
+    for (int i = 0; i < codes.size(); i++) {
+        if (codes[i] == code) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+void readHeaderDataFromBinaryFile(const string& filename) {
+    FILE* file = fopen(filename.c_str(), "rb");
+
+    if (file == NULL) {
+        cout << "Erorr occured while opening the binary file!" << endl;
+        exit(1);
+    }
+
+    int rows = 0, cols = 0;
+    int codificationsSize = 0;
+    vector<string> codes(256);
+
+    fread(&rows, 4, 1, file);
+    fread(&cols, 4, 1, file);
+
+
+    for (int i = 0; i < codes.size(); i++) {
+        int index;
+        unsigned char sizeChar;
+        string code;
+
+        fread(&index, 1, 1, file);
+        fread(&sizeChar, 1, 1, file);
+
+        int length = static_cast<int>(sizeChar);
+        int byteLength = (length % 8 != 0) ? ((length + 7) / 8) : (length / 8);
+        unsigned char* codeBytes = new unsigned char[byteLength];
+
+        for (int b = 0; b < byteLength; b++) {
+            fread(&codeBytes[b], 1, 1, file);
+        }
+
+        code = "";
+        for (int b = 0; b < byteLength; b++) {
+            for (int bit = 7; bit >= 0; bit--) {
+                char currentBit = ((codeBytes[b] & (1 << bit)) ? '1' : '0');
+                code += currentBit;
+            }
+        }
+        code = code.substr(0, length);
+
+        codes[index] = code;
+
+        delete[] codeBytes;
+    }
+
+    for (int i = 0; i < codes.size(); i++) {
+        cout << "Pixel: " << i << " Code: " << codes[i] << endl;
+    }
+
+    /*string imageEncoded = "";
+    uchar currentByte = 0;
+    while (fread(&currentByte, 1, 1, file) == 1) {
+        for (int j = 0; j < 8; j++) {
+            if (currentByte & (1 << j)) {
+                imageEncoded.append("1");
+            }
+            else {
+                imageEncoded.append("0");
+            }
+        }
+    }
+    fclose(file);
+    
+    cout << imageEncoded;
+
+    int currentRows = 0, currentCols = 0;
+    int beginningIndex = 0, currentLength = 1;
+    string currentString = "";
+    
+    Mat_<uchar> img(rows, cols);
+
+   
+
+    while ((beginningIndex + currentLength) < imageEncoded.length()) {
+        while (checkIfCodeExists(codes, currentString) == 0) {
+            currentString = imageEncoded.substr(beginningIndex, currentLength);
+            currentLength++;
+        }
+
+        img(currentRows, currentCols) = checkIfCodeExists(codes, currentString);
+        if (currentCols == cols - 1) {
+            currentCols = 0;
+            currentRows++;
+            if (currentRows == rows) {
+                break;
+            }
+        }
+        else {
+            currentCols++;
+        }
+        currentString = "";
+        beginningIndex += currentLength - 1;
+        currentLength = 1;
+    }
+
+    
+
+    imshow("mata", img);
+    waitKey();*/
+}
+
+
+int encodeData() {
+    Mat_<uchar> img = imread("Images/camera.bmp", IMREAD_GRAYSCALE);
+    // Check if the image was successfully loaded
+    if (img.empty())
+    {
+        cout << "Failed to load image." << endl;
+        return -1;
+    }
+    const string& filename = "output.dat";
+    writeDataToBinaryFile(filename, img);
+    readHeaderDataFromBinaryFile(filename);
+}
+
+int main()
+{
+
+    encodeData();
+	return 0;
+}
