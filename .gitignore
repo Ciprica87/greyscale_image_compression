@@ -13,6 +13,8 @@
 *.user
 *.suo
 *.vcxproj.user
+*.sln
+*.vcxproj
 
 # Ignore generated folders
 Debug/
@@ -28,3 +30,5 @@ Backups/
 Compressed/
 Decompressed/
 OpenCV/
+Images/
+doc/
