@@ -1,0 +1,30 @@
+# Ignore Visual Studio build files
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.log
+*.tlog
+*.sdf
+*.ipch
+*.aps
+*.ncb
+*.opensdf
+*.user
+*.suo
+*.vcxproj.user
+
+# Ignore generated folders
+Debug/
+Release/
+x64/
+ipch/
+.vscode/
+.vs/
+*.db
+
+# Custom project-specific ignores
+Backups/
+Compressed/
+Decompressed/
+OpenCV/
